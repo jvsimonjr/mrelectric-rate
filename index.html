@@ -5,21 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Rate Your Mr. Electric Service</title>
 <style>
-  :root { color-scheme: light; }
   body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; background:#f7f7f8; }
   .card { max-width: 560px; margin: 0 auto; background:#fff; border-radius:16px; padding:24px; box-shadow: 0 8px 28px rgba(0,0,0,.08); }
   h1 { margin: 0 0 8px; font-size: 22px; }
   p { margin: 8px 0 16px; color:#444; }
-  .stars { display:flex; gap:8px; font-size:32px; cursor:pointer; user-select:none; }
-  .star { filter: grayscale(1) opacity(.5); transition: transform .1s ease, filter .15s ease; }
+  .stars { display:flex; gap:8px; font-size:32px; user-select:none; }
+  .star { cursor:pointer; filter: grayscale(1) opacity(.5); transition: transform .1s ease, filter .15s ease; background:none; border:0; padding:4px 6px; }
   .star.active { filter: none; transform: translateY(-1px); }
   .actions { margin-top: 16px; display: grid; gap: 10px; }
-  a.btn, button.btn { display:inline-block; text-align:center; padding:12px 16px; border-radius:12px; text-decoration:none; border:0; cursor:pointer; font-weight:600; }
+  a.btn { display:inline-block; text-align:center; padding:12px 16px; border-radius:12px; text-decoration:none; font-weight:600; }
   .primary { background:#0ea5e9; color:#fff; }
   .secondary { background:#e5e7eb; color:#111827; }
   .note { font-size:12px; color:#6b7280; margin-top:12px; }
   .highlight { outline:3px solid #fde68a; border-radius:12px; }
-  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
 </style>
 </head>
 <body>
@@ -38,14 +36,22 @@
     <div id="chosen" style="margin-top:10px; font-weight:600;" aria-live="polite"></div>
 
     <div id="actions" class="actions" style="display:none;">
-      <!-- Public review link (always visible) -->
-      <a id="googleReview" class="btn primary" href="YOUR_GOOGLE_REVIEW_URL" target="_blank" rel="noopener">
+      <!-- Google review -->
+      <a id="googleReview" class="btn primary"
+         data-base="https://g.page/r/Cc91922swjMuEAE/review"
+         href="https://g.page/r/Cc91922swjMuEAE/review"
+         target="_blank" rel="noopener noreferrer">
         Leave a Google Review
       </a>
-      <!-- Private feedback form (always visible) -->
-      <a id="privateFeedback" class="btn secondary" href="YOUR_FEEDBACK_FORM_URL" target="_blank" rel="noopener">
+
+      <!-- Private feedback form -->
+      <a id="privateFeedback" class="btn secondary"
+         data-base="https://docs.google.com/forms/d/e/1FAIpQLSe7DVT-2KBJhzuiuIBAEirog7vn51tTd5y_GipklCBlDa6pbw/viewform?usp=header"
+         href="https://docs.google.com/forms/d/e/1FAIpQLSe7DVT-2KBJhzuiuIBAEirog7vn51tTd5y_GipklCBlDa6pbw/viewform?usp=header"
+         target="_blank" rel="noopener noreferrer">
         Send Private Feedback
       </a>
+
       <div class="note">
         We value all feedback. Public reviews help neighbors choose us; private feedback helps us fix issues fast.
       </div>
@@ -57,95 +63,63 @@
   </div>
 
 <script>
-  // ----- Config -----
-  // If you want to add UTM tags to Google reviews, set them here (optional)
-  const UTM = "utm_source=postservice&utm_medium=email&utm_campaign=review_request";
-
-  // Query keys to capture from the landing link (e.g., ?job_id=ST-1234)
-  const TRACK_KEYS = ["job_id", "st_job"];
-
-  // ----- Helpers -----
-  function addParamsToUrl(urlStr, paramsObj) {
-    try {
-      const u = new URL(urlStr, window.location.origin);
-      const urlParams = new URLSearchParams(u.search);
-      Object.entries(paramsObj).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== "") urlParams.set(k, String(v));
-      });
-      u.search = urlParams.toString();
-      return u.toString();
-    } catch (e) { return urlStr; }
-  }
-
-  function parseQuery() {
-    const p = new URLSearchParams(window.location.search);
-    const obj = {};
-    for (const k of p.keys()) obj[k] = p.get(k);
-    return obj;
-  }
-
-  // ----- Main -----
-  const params = parseQuery();
+  const TRACK_KEYS = ["job_id","st_job"]; // pass through job id if appended
   const stars = document.querySelectorAll('.star');
   const chosen = document.getElementById('chosen');
   const actions = document.getElementById('actions');
   const googleBtn = document.getElementById('googleReview');
   const privateBtn = document.getElementById('privateFeedback');
+  const pageParams = new URLSearchParams(window.location.search);
 
-  // Include UTM by default on Google review link
-  if (UTM) {
-    const utmParams = Object.fromEntries(new URLSearchParams(UTM));
-    googleBtn.href = addParamsToUrl(googleBtn.href, utmParams);
+  function buildUrl(base, extraParams) {
+    try {
+      const u = new URL(base);
+      const s = new URLSearchParams(u.search);
+      Object.entries(extraParams || {}).forEach(([k,v]) => { if(v) s.set(k,v); });
+      u.search = s.toString();
+      return u.toString();
+    } catch(e) { return base; }
   }
 
-  function setAriaChecked(val) {
-    stars.forEach(x => x.setAttribute('aria-checked', String(Number(x.dataset.value) <= val)));
+  function carryParams(score, keepUTM=false) {
+    const obj = {};
+    TRACK_KEYS.forEach(k => { if (pageParams.has(k)) obj[k] = pageParams.get(k); });
+    if (score != null) obj.score = score;
+    return obj;
   }
 
-  function carryThroughParams(baseUrl, score) {
-    const carry = {};
-    // carry selected known tracking keys
-    TRACK_KEYS.forEach(k => { if (params[k]) carry[k] = params[k]; });
-    if (score != null) carry.score = score;
-    return addParamsToUrl(baseUrl, carry);
+  function markStars(val) {
+    stars.forEach(x => {
+      const active = Number(x.dataset.value) <= val;
+      x.classList.toggle('active', active);
+      x.setAttribute('aria-checked', String(active));
+    });
   }
 
   stars.forEach(s => {
     s.addEventListener('click', () => {
       const val = Number(s.dataset.value);
-
-      // Visual + ARIA updates
-      stars.forEach(x => x.classList.toggle('active', Number(x.dataset.value) <= val));
-      setAriaChecked(val);
+      markStars(val);
       chosen.textContent = `You selected ${val} star${val>1?'s':''}.`;
       actions.style.display = 'grid';
 
-      // Append tracking + score to both destinations
-      googleBtn.href = carryThroughParams(googleBtn.href, val);
-      privateBtn.href = carryThroughParams(privateBtn.href, val);
+      // update hrefs
+      const gHref = buildUrl(googleBtn.getAttribute('data-base'), carryParams(val,true));
+      const pHref = buildUrl(privateBtn.getAttribute('data-base'), carryParams(val,false));
+      googleBtn.setAttribute('href', gHref);
+      privateBtn.setAttribute('href', pHref);
 
-      // Reorder buttons based on rating
+      // reorder based on rating
       if (val < 5) {
-        // Private Feedback first
         actions.insertBefore(privateBtn, googleBtn);
         privateBtn.classList.add('highlight');
         googleBtn.classList.remove('highlight');
       } else {
-        // Google Review first
         actions.insertBefore(googleBtn, privateBtn);
         googleBtn.classList.add('highlight');
         privateBtn.classList.remove('highlight');
       }
     });
-  });
-
-  // Optional: keyboard support for stars (left/right arrows)
-  document.getElementById('stars').addEventListener('keydown', (e) => {
-    const current = [...stars].findIndex(b => b.classList.contains('active')) + 1;
-    let next = current || 0;
-    if (e.key === 'ArrowRight') next = Math.min(5, (current || 1) + 1);
-    if (e.key === 'ArrowLeft') next = Math.max(1, (current || 1) - 1);
-    if (next && next !== current) stars[next-1].click();
   });
 </script>
 </body>
